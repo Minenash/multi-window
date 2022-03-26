@@ -11,6 +11,7 @@ import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.client.render.DiffuseLighting;
 import net.minecraft.client.util.GlfwUtil;
 import net.minecraft.client.util.math.MatrixStack;
+import net.minecraft.util.Identifier;
 import net.minecraft.util.crash.CrashException;
 import net.minecraft.util.crash.CrashReport;
 import net.minecraft.util.crash.CrashReportSection;
@@ -77,6 +78,7 @@ public class ScreenWindow {
         this.context.onMouseButton.register((button, action, mods) -> this.client.execute(() -> this.onMouseButton(button, action, mods)));
         this.context.onMouseScroll.register((xOffset, yOffset) -> this.client.execute(() -> this.onMouseScroll(xOffset, yOffset)));
         this.context.onFilesDropped.register(files -> this.client.execute(() -> this.onFilesDropped(List.of(files))));
+        this.context.setIcon(new Identifier("multi-window", "textures/icons/icon_16x.png"), new Identifier("multi-window", "textures/icons/icon_32x.png"));
     }
 
     public void setTitle(String title) {

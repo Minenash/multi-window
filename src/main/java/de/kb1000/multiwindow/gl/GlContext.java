@@ -1,14 +1,31 @@
 package de.kb1000.multiwindow.gl;
 
 import com.mojang.blaze3d.platform.GlStateManager;
+import com.mojang.blaze3d.platform.TextureUtil;
+import com.mojang.blaze3d.systems.RenderSystem;
 import de.kb1000.multiwindow.gl.events.*;
+import io.netty.util.internal.ResourcesUtil;
 import net.fabricmc.fabric.api.event.Event;
 import net.fabricmc.fabric.api.event.EventFactory;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gl.GlDebug;
 import net.minecraft.client.render.VertexFormat;
+import net.minecraft.resource.ResourceType;
+import net.minecraft.util.Identifier;
 import org.lwjgl.glfw.*;
+import org.lwjgl.stb.STBImage;
+import org.lwjgl.system.MemoryStack;
+import org.lwjgl.system.MemoryUtil;
 
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
+import java.io.IOException;
+import java.io.InputStream;
+import java.nio.ByteBuffer;
+import java.nio.IntBuffer;
+import java.nio.channels.Channels;
+import java.nio.channels.FileChannel;
+import java.nio.channels.ReadableByteChannel;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.HashMap;
@@ -180,5 +197,85 @@ public class GlContext {
             }
 
         }
+    }
+
+    public void setIcon(Identifier icon16, Identifier icon32) {
+
+        try {
+            InputStream icon16Stream = MinecraftClient.getInstance().getResourceManager().getResource(icon16).getInputStream();
+            InputStream icon32Stream = MinecraftClient.getInstance().getResourceManager().getResource(icon32).getInputStream();
+
+            try (MemoryStack memoryStack = MemoryStack.stackPush()) {
+                if (icon16Stream == null)
+                    throw new FileNotFoundException(icon16.toString());
+
+                if (icon32Stream == null)
+                    throw new FileNotFoundException(icon32.toString());
+
+                IntBuffer intBuffer = memoryStack.mallocInt(1);
+                IntBuffer intBuffer2 = memoryStack.mallocInt(1);
+                IntBuffer intBuffer3 = memoryStack.mallocInt(1);
+                GLFWImage.Buffer buffer = GLFWImage.mallocStack(2, memoryStack);
+                ByteBuffer byteBuffer = this.readImage(icon16Stream, intBuffer, intBuffer2, intBuffer3);
+                if (byteBuffer == null)
+                    throw new IllegalStateException("Could not load icon: " + STBImage.stbi_failure_reason());
+
+                buffer.position(0);
+                buffer.width(intBuffer.get(0));
+                buffer.height(intBuffer2.get(0));
+                buffer.pixels(byteBuffer);
+                ByteBuffer byteBuffer2 = this.readImage(icon32Stream, intBuffer, intBuffer2, intBuffer3);
+                if (byteBuffer2 == null)
+                    throw new IllegalStateException("Could not load icon: " + STBImage.stbi_failure_reason());
+
+                buffer.position(1);
+                buffer.width(intBuffer.get(0));
+                buffer.height(intBuffer2.get(0));
+                buffer.pixels(byteBuffer2);
+                buffer.position(0);
+                GLFW.glfwSetWindowIcon(this.handle, buffer);
+                STBImage.stbi_image_free(byteBuffer);
+                STBImage.stbi_image_free(byteBuffer2);
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+
+    }
+
+    private ByteBuffer readImage(InputStream in, IntBuffer x, IntBuffer y, IntBuffer channels) throws IOException {
+        ByteBuffer byteBuffer = null;
+
+        ByteBuffer var6;
+        try {
+
+            if (in instanceof FileInputStream) {
+                FileInputStream fileInputStream = (FileInputStream)in;
+                FileChannel fileChannel = fileInputStream.getChannel();
+                byteBuffer = MemoryUtil.memAlloc((int)fileChannel.size() + 1);
+
+                while(fileChannel.read(byteBuffer) != -1) {}
+            } else {
+                byteBuffer = MemoryUtil.memAlloc(8192);
+                ReadableByteChannel readableByteChannel = Channels.newChannel(in);
+
+                while(readableByteChannel.read(byteBuffer) != -1) {
+                    if (byteBuffer.remaining() == 0) {
+                        byteBuffer = MemoryUtil.memRealloc(byteBuffer, byteBuffer.capacity() * 2);
+                    }
+                }
+            }
+
+
+            byteBuffer.rewind();
+            var6 = STBImage.stbi_load_from_memory(byteBuffer, x, y, channels, 0);
+        } finally {
+            if (byteBuffer != null) {
+                MemoryUtil.memFree(byteBuffer);
+            }
+
+        }
+
+        return var6;
     }
 }
