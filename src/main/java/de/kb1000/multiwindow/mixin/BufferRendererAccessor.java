@@ -1,4 +1,4 @@
-package de.kb1000.multiwindow.mixin.client;
+package de.kb1000.multiwindow.mixin;
 
 import net.minecraft.client.render.BufferRenderer;
 import org.spongepowered.asm.mixin.Mixin;

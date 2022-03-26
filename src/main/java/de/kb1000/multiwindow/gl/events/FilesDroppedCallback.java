@@ -1,4 +1,4 @@
-package de.kb1000.multiwindow.client.gl.events;
+package de.kb1000.multiwindow.gl.events;
 
 import java.nio.file.Path;
 

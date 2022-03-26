@@ -1,4 +1,4 @@
-package de.kb1000.multiwindow.client.gl;
+package de.kb1000.multiwindow.gl;
 
 import org.lwjgl.glfw.GLFW;
 

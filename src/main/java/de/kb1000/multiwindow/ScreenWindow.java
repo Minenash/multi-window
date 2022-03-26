@@ -1,9 +1,7 @@
-package de.kb1000.multiwindow.client.gui;
+package de.kb1000.multiwindow;
 
 import com.mojang.blaze3d.systems.RenderSystem;
-import de.kb1000.multiwindow.accessor.client.ScreenAccessor;
-import de.kb1000.multiwindow.client.MultiWindowClient;
-import de.kb1000.multiwindow.client.gl.GlContext;
+import de.kb1000.multiwindow.gl.GlContext;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 import net.fabricmc.fabric.api.client.screen.v1.Screens;
@@ -32,34 +30,48 @@ import static org.lwjgl.glfw.GLFW.GLFW_PRESS;
 
 @Environment(EnvType.CLIENT)
 public class ScreenWindow {
-    private final GlContext context;
+    public final GlContext context;
     private final WindowFramebuffer framebuffer;
-    private final @NotNull Screen screen;
-    private boolean isClosing;
+    private @NotNull Screen screen;
     private double x;
     private double y;
-    private final MinecraftClient client;
+    private final MinecraftClient client = MinecraftClient.getInstance();
     private final Queue<Runnable> queue = new ConcurrentLinkedQueue<>();
     private int controlLeftTicks;
     private int activeButton;
     private int field_1796;
     private double glfwTime;
     private boolean closing = false;
+    private boolean customTitle = false;
+
+    private float scaleFactor;
+    private int scaledWidth, scaledHeight;
 
     public ScreenWindow(@NotNull Screen screen) {
-        this.client = Screens.getClient(screen);
-        this.context = new GlContext(screen.width, screen.height, screen.getTitle().getString(), client.getWindow().getHandle());
+        int initWidth = client.getWindow().getWidth();
+        int initHeight = client.getWindow().getHeight();
+
+        this.context = new GlContext(initWidth, initHeight, screen.getTitle().getString(), client.getWindow().getHandle());
         try (var ignored = this.context.setContext()) {
-            this.framebuffer = new WindowFramebuffer(screen.width, screen.height);
+            this.framebuffer = new WindowFramebuffer(initWidth, initHeight);
         }
+        this.screen = screen;
+
+        calculateScaleValues(initWidth, initHeight);
+
+        screen.init(client, scaledWidth, scaledHeight);
+
         this.context.onSizeChanged.register((width, height) -> {
             try (var ignored = context.setContext()) {
                 this.framebuffer.resize(width, height, MinecraftClient.IS_SYSTEM_MAC);
-                screen.width = width;
-                screen.height = height;
+
+                calculateScaleValues(width, height);
+
+                this.screen.resize(client, scaledWidth, scaledHeight);
+
+
             }
         });
-        this.screen = screen;
         // TODO: make these run in render or update instead of on the main thread
         this.context.onMouseMove.register((x, y) -> this.client.execute(() -> this.onCursorPos(x, y)));
         this.context.onMouseButton.register((button, action, mods) -> this.client.execute(() -> this.onMouseButton(button, action, mods)));
@@ -67,18 +79,36 @@ public class ScreenWindow {
         this.context.onFilesDropped.register(files -> this.client.execute(() -> this.onFilesDropped(List.of(files))));
     }
 
-    private void execute(Runnable r) {
-        queue.add(r);
+    public void setTitle(String title) {
+        customTitle = true;
+        GLFW.glfwSetWindowTitle(context.getHandle(), title);
+    }
+
+    private void calculateScaleValues(int width, int height) {
+        int i = 1;
+
+        while (i != client.options.guiScale && i < width && i < height && width / (i+1) >= 320 && height / (i+1) >= 240) {
+            i++;
+        }
+
+        scaleFactor = client.forcesUnicodeFont() && i % 2 != 0 ? ++i : i;
+        this.scaledWidth = (int) Math.ceil(width / scaleFactor);
+        this.scaledHeight = (int) Math.ceil(height / scaleFactor);
+    }
+
+    public void setScreen(Screen screen) {
+        this.screen = screen;
+        this.screen.init(client, context.getWidth(), context.getHeight());
+        if (!customTitle)
+            GLFW.glfwSetWindowTitle(context.getHandle(), screen.getTitle().getString());
     }
 
     private void onCursorPos(double x, double y) {
         Screen.wrapScreenError(() -> screen.mouseMoved(x, y), "mouseMoved event handler", screen.getClass().getCanonicalName());
         if (this.activeButton != -1 && this.glfwTime > 0.0D) {
-            double f = (x - this.x) * (double)this.client.getWindow().getScaledWidth() / (double)this.client.getWindow().getWidth();
-            double g = (y - this.y) * (double)this.client.getWindow().getScaledHeight() / (double)this.client.getWindow().getHeight();
-            Screen.wrapScreenError(() -> {
-                screen.mouseDragged(x, y, this.activeButton, x - this.x, y - this.y);
-            }, "mouseDragged event handler", screen.getClass().getCanonicalName());
+            Screen.wrapScreenError(
+                () -> screen.mouseDragged(x, y, this.activeButton, x - this.x, y - this.y),
+                "mouseDragged event handler", screen.getClass().getCanonicalName());
         }
 
         screen.applyMouseMoveNarratorDelay();
@@ -102,71 +132,44 @@ public class ScreenWindow {
         }
 
         if (isPress) {
-            if (this.client.options.touchscreen && this.field_1796++ > 0) {
+            if (this.client.options.touchscreen && this.field_1796++ > 0)
                 return;
-            }
 
             this.activeButton = button;
             this.glfwTime = GlfwUtil.getTime();
         } else if (this.activeButton != -1) {
-            if (this.client.options.touchscreen && --this.field_1796 > 0) {
+            if (this.client.options.touchscreen && --this.field_1796 > 0)
                 return;
-            }
 
             this.activeButton = -1;
         }
 
-        double d = this.x * 1;
-        double e = this.y * 1;
         final int finalButton = button;
-        ScreenContextTracker.pushContext(ScreenContextTracker.ScreenContextElement.ScreenEventType.MOUSE_BUTTON, ((ScreenAccessor)screen).multi_window_getTreeElement());
-        if (isPress) {
-            Screen.wrapScreenError(() -> this.screen.mouseClicked(d, e, finalButton), "mouseClicked event handler", this.screen.getClass().getCanonicalName());
-        } else {
-            Screen.wrapScreenError(() -> this.screen.mouseReleased(d, e, finalButton), "mouseReleased event handler", this.screen.getClass().getCanonicalName());
-        }
-        ScreenContextTracker.popContext();
+
+        Screen.wrapScreenError(() -> this.screen.mouseClicked(x, y, finalButton), isPress ? "mouseClicked event handler" : "mouseReleased event handler", this.screen.getClass().getCanonicalName());
+
+
     }
 
     private void onMouseScroll(double xOffset, double yOffset) {
-        double totalYScroll = (this.client.options.discreteMouseScroll ? Math.signum(yOffset) : yOffset) * this.client.options.mouseWheelSensitivity;
+        double totalYScroll = (client.options.discreteMouseScroll ? Math.signum(yOffset) : yOffset) * client.options.mouseWheelSensitivity;
 
-        this.screen.mouseScrolled(this.x, this.y, totalYScroll);
+        this.screen.mouseScrolled(x, y, totalYScroll);
         this.screen.applyMousePressScrollNarratorDelay();
     }
 
     private void onFilesDropped(List<Path> names) {
-        this.screen.filesDragged(names);
+        screen.filesDragged(names);
     }
-
-//    @Override
-//    public void setupRender() {
-//        RenderContextTracker.pushContext(this);
-//        super.setupRender();
-//        RenderContextTracker.popContext();
-//    }
-//
-//    @Override
-//    public void render(MatrixStack stack) {
-//        super.render(stack);
-//        while (!queue.isEmpty()) {
-//            queue.poll().run();
-//        }
-//        screen.render(stack, (int) x, (int) y, this.client.getLastFrameDuration());
-//        while (!queue.isEmpty()) {
-//            queue.poll().run();
-//        }
-//    }
 
     public void markAsClosing() {
         closing = true;
     }
 
+    @Deprecated
     public void destroy() {
         context.destroy();
         screen.removed();
-
-        MultiWindowClient.ALL_WINDOWS.remove(this);
     }
 
     public void render() {
@@ -186,53 +189,25 @@ public class ScreenWindow {
 
             RenderSystem.depthFunc(GL30.GL_LEQUAL);
 
-            Matrix4f matrix4f = Matrix4f.projectionMatrix(0.0F, context.getWidth(), 0.0F, context.getHeight(), 1000.0F, 3000.0F);
+            Matrix4f matrix4f = Matrix4f.projectionMatrix(0.0F, scaledWidth, 0.0F, scaledHeight, 1000.0F, 3000.0F);
             RenderSystem.setProjectionMatrix(matrix4f);
             modelViewStack.loadIdentity();
             modelViewStack.translate(0.0, 0.0, -2000.0);
             RenderSystem.applyModelViewMatrix();
             DiffuseLighting.enableGuiDepthLighting();
             MatrixStack stack = new MatrixStack();
-            /*if (this.client.world != null) {
-                this.client.getProfiler().swap("gui");
-                     this.renderFloatingItem(this.client.getWindow().getScaledWidth(), this.client.getWindow().getScaledHeight(), tickDelta);
-                RenderSystem.clear(256, MinecraftClient.IS_SYSTEM_MAC);
-
-                this.client.getProfiler().pop();
-            }*/
 
             try {
-                while (!queue.isEmpty()) {
+                while (!queue.isEmpty())
                     queue.poll().run();
-                }
+
                 screen.render(stack, (int) x, (int) y, this.client.getLastFrameDuration());
-                while (!queue.isEmpty()) {
+
+                while (!queue.isEmpty())
                     queue.poll().run();
-                }
-            } catch (Throwable var15) {
-                CrashReport crashReport = CrashReport.create(var15, "Rendering screen");
-                CrashReportSection crashReportSection = crashReport.addElement("Screen render details");
-                crashReportSection.add("Screen name", () -> screen.getClass().getCanonicalName());
-                crashReportSection.add(
-                        "Mouse location",
-                        () -> String.format(
-                                Locale.ROOT, "Scaled: (%d, %d). Absolute: (%f, %f)", (int)x, (int)y, x, y
-                        )
-                );
-                // TODO: wrong, fix later
-                crashReportSection.add(
-                        "Screen size",
-                        () -> String.format(
-                                Locale.ROOT,
-                                "Scaled: (%d, %d). Absolute: (%d, %d). Scale factor of %f",
-                                this.client.getWindow().getScaledWidth(),
-                                this.client.getWindow().getScaledHeight(),
-                                this.client.getWindow().getFramebufferWidth(),
-                                this.client.getWindow().getFramebufferHeight(),
-                                this.client.getWindow().getScaleFactor()
-                        )
-                );
-                throw new CrashException(crashReport);
+
+            } catch (Throwable t) {
+                throw new CrashException(createRenderCrashReport(t));
             }
 
             this.framebuffer.endWrite();
@@ -248,6 +223,32 @@ public class ScreenWindow {
 
     public boolean isClosing() {
         return context.getHandle() == 0 || closing || GLFW.glfwWindowShouldClose(context.getHandle());
+    }
+
+    private CrashReport createRenderCrashReport(Throwable t) {
+        CrashReport crashReport = CrashReport.create(t, "Rendering screen");
+        CrashReportSection crashReportSection = crashReport.addElement("Screen render details");
+        crashReportSection.add("Screen name", () -> screen.getClass().getCanonicalName());
+        crashReportSection.add(
+                "Mouse location",
+                () -> String.format(
+                        Locale.ROOT, "Scaled: (%d, %d). Absolute: (%f, %f)", (int)x, (int)y, x, y
+                )
+        );
+        // TODO: wrong, fix later
+        crashReportSection.add(
+                "Screen size",
+                () -> String.format(
+                        Locale.ROOT,
+                        "Scaled: (%d, %d). Absolute: (%d, %d). Scale factor of %f",
+                        this.client.getWindow().getScaledWidth(),
+                        this.client.getWindow().getScaledHeight(),
+                        this.client.getWindow().getFramebufferWidth(),
+                        this.client.getWindow().getFramebufferHeight(),
+                        this.client.getWindow().getScaleFactor()
+                )
+        );
+        return crashReport;
     }
 
 }

@@ -1,9 +1,9 @@
-package de.kb1000.multiwindow.client.gl;
+package de.kb1000.multiwindow.gl;
 
 import com.mojang.blaze3d.platform.GlStateManager;
-import de.kb1000.multiwindow.mixin.client.BufferRendererAccessor;
-import de.kb1000.multiwindow.mixin.client.CapabilityTrackerAccessor;
-import de.kb1000.multiwindow.mixin.client.GlStateManagerAccessor;
+import de.kb1000.multiwindow.mixin.BufferRendererAccessor;
+import de.kb1000.multiwindow.mixin.CapabilityTrackerAccessor;
+import de.kb1000.multiwindow.mixin.GlStateManagerAccessor;
 import org.lwjgl.system.MemoryUtil;
 
 import java.nio.ByteBuffer;

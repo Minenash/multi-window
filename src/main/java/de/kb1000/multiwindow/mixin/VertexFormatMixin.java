@@ -1,6 +1,6 @@
-package de.kb1000.multiwindow.mixin.client;
+package de.kb1000.multiwindow.mixin;
 
-import de.kb1000.multiwindow.client.gl.GlContextTracker;
+import de.kb1000.multiwindow.gl.GlContextTracker;
 import net.minecraft.client.render.VertexFormat;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;

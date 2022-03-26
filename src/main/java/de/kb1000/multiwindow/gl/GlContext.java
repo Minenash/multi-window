@@ -1,7 +1,7 @@
-package de.kb1000.multiwindow.client.gl;
+package de.kb1000.multiwindow.gl;
 
 import com.mojang.blaze3d.platform.GlStateManager;
-import de.kb1000.multiwindow.client.gl.events.*;
+import de.kb1000.multiwindow.gl.events.*;
 import net.fabricmc.fabric.api.event.Event;
 import net.fabricmc.fabric.api.event.EventFactory;
 import net.minecraft.client.MinecraftClient;

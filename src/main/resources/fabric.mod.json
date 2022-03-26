@@ -13,9 +13,6 @@
   "environment": "*",
   "entrypoints": {
     "client": [
-      "de.kb1000.multiwindow.client.MultiWindowClient"
-    ],
-    "main": [
       "de.kb1000.multiwindow.MultiWindow"
     ]
   },

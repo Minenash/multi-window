@@ -1,4 +1,4 @@
-package de.kb1000.multiwindow.mixin.client;
+package de.kb1000.multiwindow.mixin;
 
 import com.mojang.blaze3d.platform.GlStateManager;
 import org.spongepowered.asm.mixin.Mixin;
