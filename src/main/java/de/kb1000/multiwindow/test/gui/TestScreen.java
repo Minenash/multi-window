@@ -1,6 +1,6 @@
 package de.kb1000.multiwindow.test.gui;
 
-import de.kb1000.multiwindow.MultiWindow;
+import de.kb1000.multiwindow.WindowAPI;
 import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.client.util.math.MatrixStack;
 import net.minecraft.text.LiteralText;
@@ -23,7 +23,7 @@ public class TestScreen extends Screen {
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
 
-        MultiWindow.setScreen("breakout_a", new TestScreen(mouseX + " " + mouseY));
+        WindowAPI.getWindow(this).setScreen(new TestScreen(mouseX + " " + mouseY));
 
         return super.mouseClicked(mouseX, mouseY, button);
     }

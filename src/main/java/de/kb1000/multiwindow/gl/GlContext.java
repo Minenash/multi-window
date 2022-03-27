@@ -199,6 +199,38 @@ public class GlContext {
         }
     }
 
+    public void setIcon(Identifier icon) {
+
+        try {
+            InputStream iconStream = MinecraftClient.getInstance().getResourceManager().getResource(icon).getInputStream();
+
+            try (MemoryStack memoryStack = MemoryStack.stackPush()) {
+                if (iconStream == null)
+                    throw new FileNotFoundException(icon.toString());
+
+                IntBuffer widthBuffer = memoryStack.mallocInt(1);
+                IntBuffer heightBuffer = memoryStack.mallocInt(1);
+                ByteBuffer pixelBuffer = this.readImage(iconStream, widthBuffer, heightBuffer, memoryStack.mallocInt(1));
+
+                if (pixelBuffer == null)
+                    throw new IllegalStateException("Could not load icon: " + STBImage.stbi_failure_reason());
+
+                GLFW.glfwSetWindowIcon(this.handle,
+                    GLFWImage.mallocStack(1, memoryStack)
+                    .position(0)
+                    .width(widthBuffer.get(0))
+                    .height(heightBuffer.get(0))
+                    .pixels(pixelBuffer)
+                );
+
+                STBImage.stbi_image_free(pixelBuffer);
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+
+    }
+
     public void setIcon(Identifier icon16, Identifier icon32) {
 
         try {
@@ -216,6 +248,7 @@ public class GlContext {
                 IntBuffer intBuffer2 = memoryStack.mallocInt(1);
                 IntBuffer intBuffer3 = memoryStack.mallocInt(1);
                 GLFWImage.Buffer buffer = GLFWImage.mallocStack(2, memoryStack);
+
                 ByteBuffer byteBuffer = this.readImage(icon16Stream, intBuffer, intBuffer2, intBuffer3);
                 if (byteBuffer == null)
                     throw new IllegalStateException("Could not load icon: " + STBImage.stbi_failure_reason());
@@ -246,11 +279,10 @@ public class GlContext {
     private ByteBuffer readImage(InputStream in, IntBuffer x, IntBuffer y, IntBuffer channels) throws IOException {
         ByteBuffer byteBuffer = null;
 
-        ByteBuffer var6;
+        ByteBuffer image;
         try {
 
-            if (in instanceof FileInputStream) {
-                FileInputStream fileInputStream = (FileInputStream)in;
+            if (in instanceof FileInputStream fileInputStream) {
                 FileChannel fileChannel = fileInputStream.getChannel();
                 byteBuffer = MemoryUtil.memAlloc((int)fileChannel.size() + 1);
 
@@ -260,22 +292,19 @@ public class GlContext {
                 ReadableByteChannel readableByteChannel = Channels.newChannel(in);
 
                 while(readableByteChannel.read(byteBuffer) != -1) {
-                    if (byteBuffer.remaining() == 0) {
+                    if (byteBuffer.remaining() == 0)
                         byteBuffer = MemoryUtil.memRealloc(byteBuffer, byteBuffer.capacity() * 2);
-                    }
                 }
             }
 
-
             byteBuffer.rewind();
-            var6 = STBImage.stbi_load_from_memory(byteBuffer, x, y, channels, 0);
+            image = STBImage.stbi_load_from_memory(byteBuffer, x, y, channels, 0);
         } finally {
-            if (byteBuffer != null) {
+            if (byteBuffer != null)
                 MemoryUtil.memFree(byteBuffer);
-            }
 
         }
 
-        return var6;
+        return image;
     }
 }

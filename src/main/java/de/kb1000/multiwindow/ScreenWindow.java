@@ -4,7 +4,6 @@ import com.mojang.blaze3d.systems.RenderSystem;
 import de.kb1000.multiwindow.gl.GlContext;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
-import net.fabricmc.fabric.api.client.screen.v1.Screens;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gl.WindowFramebuffer;
 import net.minecraft.client.gui.screen.Screen;
@@ -31,21 +30,23 @@ import static org.lwjgl.glfw.GLFW.GLFW_PRESS;
 
 @Environment(EnvType.CLIENT)
 public class ScreenWindow {
+
+    private final MinecraftClient client = MinecraftClient.getInstance();
+    public static final Identifier DEFAULT_ICON_16X = new Identifier("multi-window", "textures/icons/icon_16x.png");
+    public static final Identifier DEFAULT_ICON_32X = new Identifier("multi-window", "textures/icons/icon_32x.png");
+
     public final GlContext context;
     private final WindowFramebuffer framebuffer;
     private @NotNull Screen screen;
     private double x;
     private double y;
-    private final MinecraftClient client = MinecraftClient.getInstance();
     private final Queue<Runnable> queue = new ConcurrentLinkedQueue<>();
     private int controlLeftTicks;
     private int activeButton;
     private int field_1796;
     private double glfwTime;
-    private boolean closing = false;
     private boolean customTitle = false;
 
-    private float scaleFactor;
     private int scaledWidth, scaledHeight;
 
     public ScreenWindow(@NotNull Screen screen) {
@@ -56,21 +57,16 @@ public class ScreenWindow {
         try (var ignored = this.context.setContext()) {
             this.framebuffer = new WindowFramebuffer(initWidth, initHeight);
         }
+
         this.screen = screen;
-
         calculateScaleValues(initWidth, initHeight);
-
         screen.init(client, scaledWidth, scaledHeight);
 
         this.context.onSizeChanged.register((width, height) -> {
             try (var ignored = context.setContext()) {
                 this.framebuffer.resize(width, height, MinecraftClient.IS_SYSTEM_MAC);
-
                 calculateScaleValues(width, height);
-
                 this.screen.resize(client, scaledWidth, scaledHeight);
-
-
             }
         });
         // TODO: make these run in render or update instead of on the main thread
@@ -78,7 +74,7 @@ public class ScreenWindow {
         this.context.onMouseButton.register((button, action, mods) -> this.client.execute(() -> this.onMouseButton(button, action, mods)));
         this.context.onMouseScroll.register((xOffset, yOffset) -> this.client.execute(() -> this.onMouseScroll(xOffset, yOffset)));
         this.context.onFilesDropped.register(files -> this.client.execute(() -> this.onFilesDropped(List.of(files))));
-        this.context.setIcon(new Identifier("multi-window", "textures/icons/icon_16x.png"), new Identifier("multi-window", "textures/icons/icon_32x.png"));
+        this.context.setIcon(DEFAULT_ICON_16X, DEFAULT_ICON_32X);
     }
 
     public void setTitle(String title) {
@@ -86,23 +82,38 @@ public class ScreenWindow {
         GLFW.glfwSetWindowTitle(context.getHandle(), title);
     }
 
-    private void calculateScaleValues(int width, int height) {
-        int i = 1;
+    public void setIcon(Identifier icon) {
+        context.setIcon(icon);
+    }
 
-        while (i != client.options.guiScale && i < width && i < height && width / (i+1) >= 320 && height / (i+1) >= 240) {
-            i++;
-        }
-
-        scaleFactor = client.forcesUnicodeFont() && i % 2 != 0 ? ++i : i;
-        this.scaledWidth = (int) Math.ceil(width / scaleFactor);
-        this.scaledHeight = (int) Math.ceil(height / scaleFactor);
+    public void setIcon(Identifier x16, Identifier x32) {
+        context.setIcon(x16, x32);
     }
 
     public void setScreen(Screen screen) {
+        String id = WindowAPI.SCREEN_TO_ID.get(this.screen);
+        WindowAPI.SCREEN_TO_ID.remove(this.screen);
+        WindowAPI.SCREEN_TO_ID.put(screen, id);
+
         this.screen = screen;
         this.screen.init(client, context.getWidth(), context.getHeight());
         if (!customTitle)
             GLFW.glfwSetWindowTitle(context.getHandle(), screen.getTitle().getString());
+    }
+
+    public Screen getScreen() {
+        return this.screen;
+    }
+
+    private void calculateScaleValues(int width, int height) {
+        int i = 1;
+
+        while (i != client.options.guiScale && i < width && i < height && width / (i+1) >= 320 && height / (i+1) >= 240)
+            i++;
+
+        float scaleFactor = client.forcesUnicodeFont() && i % 2 != 0 ? ++i : i;
+        this.scaledWidth = (int) Math.ceil(width / scaleFactor);
+        this.scaledHeight = (int) Math.ceil(height / scaleFactor);
     }
 
     private void onCursorPos(double x, double y) {
@@ -150,7 +161,6 @@ public class ScreenWindow {
 
         Screen.wrapScreenError(() -> this.screen.mouseClicked(x, y, finalButton), isPress ? "mouseClicked event handler" : "mouseReleased event handler", this.screen.getClass().getCanonicalName());
 
-
     }
 
     private void onMouseScroll(double xOffset, double yOffset) {
@@ -164,11 +174,6 @@ public class ScreenWindow {
         screen.filesDragged(names);
     }
 
-    public void markAsClosing() {
-        closing = true;
-    }
-
-    @Deprecated
     public void destroy() {
         context.destroy();
         screen.removed();
@@ -224,7 +229,7 @@ public class ScreenWindow {
     }
 
     public boolean isClosing() {
-        return context.getHandle() == 0 || closing || GLFW.glfwWindowShouldClose(context.getHandle());
+        return context.getHandle() == 0 || GLFW.glfwWindowShouldClose(context.getHandle());
     }
 
     private CrashReport createRenderCrashReport(Throwable t) {
